@@ -2,6 +2,9 @@
 
 An intelligent AI agent built with Google's Gemini AI that can perform various tasks using external tools. This agent can understand natural language queries and automatically execute the appropriate functions to provide accurate responses.
 
+## Architecture
+![DSA Instructor Bot - Code Features](./public/AiAgentArchitecture.png)
+
 ## 🌟 Why This AI Agent?
 
 Traditional AI chatbots can only provide text-based responses from their training data. This AI Agent goes beyond by:
@@ -257,3 +260,4 @@ This project is open source and available under the MIT License.
 ---
 
 **Built with ❤️ using Node.js, Gemini AI, and various APIs**
+
