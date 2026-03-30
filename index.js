@@ -13,11 +13,10 @@ import { bitcoinTool } from "./External Tools/tool.bitcoin.js";
 // Declarations
 import { dictionaryToolFunctionDeclaration } from "./Tool Declaration/declare.dictionary.js";
 import { sumToolFunctionDeclaration } from "./Tool Declaration/declare.sum.js";
-import { weatherToolFunctionDeclaration } from './Tool Declaration/declare.weather.js';
-import { quoteToolFunctionDeclaration } from './Tool Declaration/declare.quotes.js';
-import { jokeToolFunctionDeclaration } from './Tool Declaration/declare.jokes.js';
-import { bitCoinFunctionDeclaration } from './Tool Declaration/declare.bitcoin.js';
-
+import { weatherToolFunctionDeclaration } from "./Tool Declaration/declare.weather.js";
+import { quoteToolFunctionDeclaration } from "./Tool Declaration/declare.quotes.js";
+import { jokeToolFunctionDeclaration } from "./Tool Declaration/declare.jokes.js";
+import { bitCoinFunctionDeclaration } from "./Tool Declaration/declare.bitcoin.js";
 
 // Initialize AI
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }); // Enter Your GEMINI API HERE
@@ -25,7 +24,10 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }); // Enter You
 // Conversation History
 const History = [];
 
-// Tool Declarations For Gemini API  
+const MAX_ITERATIONS = 5;
+let CURRENT_ITERATION = 0;
+
+// Tool Declarations For Gemini API
 const tools = [
   {
     functionDeclarations: [
@@ -40,64 +42,131 @@ const tools = [
 ];
 
 async function runAgent(question) {
-  console.log("Generating response....");
+  /**
+   * 0 to MAX_ITERATIONS
+   */
+  while (CURRENT_ITERATION < MAX_ITERATIONS) {
+    console.log("Generating response....");
 
-  const result = await ai.models.generateContent({
-    model: "gemini-1.5-flash",
-    contents: History,
-    config: { tools },
-  });
+    if (CURRENT_ITERATION >= MAX_ITERATIONS) {
+      console.log("Max iterations reached. Stopping.");
+      return;
+    }
 
-  if (result.functionCalls && result.functionCalls.length > 0) {
-    console.log("Taking External Action....");
+    CURRENT_ITERATION++;
 
-    // const functionCall = result.functionCalls[0];
+    const result = await ai.models.generateContent({
+      model: process.env.GEMINI_MODEL,
+      contents: History,
+      config: { tools },
+    });
 
-    let toolResult;
+    // if function calls are there
+    if (result.functionCalls && result.functionCalls.length > 0) {
+      console.log("Taking External Action....");
 
-    for (let tool of result.functionCalls) {
-      const functionName = tool.name;
-      const functionArgs = tool.args;
+      // const functionCall = result.functionCalls[0];
 
-      console.log("Function name:", functionName);
-      console.log("Function arguments:", functionArgs);
+      var toolResult = "";
 
-      switch (tool["name"]) {
-        case "sumTool":
-          toolResult = await sumTool(functionArgs);
-          break;
-        case "jokeTool":
-          toolResult = await jokeTool(functionArgs);
-          break;
-        case "bitCoinTool":
-          toolResult = await bitCoinTool(functionArgs);
-          break;
-        case "quoteTool":
-          toolResult = await quoteTool(functionArgs);
-          break;
-        case "dictionaryTool":
-          toolResult = await dictionaryTool(functionArgs);
-          break;
-        case "weatherTool":
-          toolResult = await weatherTool(functionArgs);
-          break;
-        default:
-          throw new Error("Unknown function call");
+      for (let tool of result.functionCalls) {
+        const functionName = tool.name;
+        const functionArgs = tool.args;
+
+        console.log("Function name:", functionName);
+        console.log("Function arguments:", functionArgs);
+
+        switch (tool["name"]) {
+          case "sumTool": {
+            const res = await sumTool(functionArgs);
+            toolResult =
+              (typeof res === "object" ? JSON.stringify(res) : res) +
+              " " +
+              toolResult;
+            break;
+          }
+          case "jokeTool": {
+            const res = await jokeTool(functionArgs);
+            toolResult =
+              (typeof res === "object" ? JSON.stringify(res) : res) +
+              "\n" +
+              toolResult;
+            break;
+          }
+          case "bitcoinTool": {
+            const res = await bitcoinTool(functionArgs);
+            toolResult =
+              (typeof res === "object" ? JSON.stringify(res) : res) +
+              "\n" +
+              toolResult;
+            break;
+          }
+          case "quoteTool": {
+            const res = await quoteTool(functionArgs);
+            toolResult =
+              (typeof res === "object" ? JSON.stringify(res) : res) +
+              "\n" +
+              toolResult;
+            break;
+          }
+          case "dictionaryTool": {
+            const res = await dictionaryTool(functionArgs);
+            toolResult =
+              (typeof res === "object" ? JSON.stringify(res) : res) +
+              "\n" +
+              toolResult;
+            break;
+          }
+          case "weatherTool": {
+            const res = await weatherTool(functionArgs);
+            toolResult =
+              (typeof res === "object" ? JSON.stringify(res) : res) +
+              "\n" +
+              toolResult;
+            break;
+          }
+          default:
+            throw new Error("Unknown function call");
+        }
+
+        // we need to tell to the model that this is the Functiona name and response
+        // according to the that it will generate NLP Output
+        History.push({
+          role: "user",
+          parts: [
+            {
+              functionResponse: {
+                name: functionName,
+                response: { result: toolResult },
+              },
+            },
+          ],
+        });
+
+        console.log("Tool: ", toolResult);
+        console.log("Tool result:", JSON.stringify(toolResult));
       }
 
+      // only when run if there is any functiona Calls are there !
+      // Calling the function again for getting better response
+      // because we saw that
+      const newQuestion = "Check History Accordingly give me the Final Output!";
+      await runAgent(newQuestion);
+      break;
+    } else {
+      // Find the text parts explicitly to avoid the SDK's internal warning about "thoughtSignature"
+      const textResponse = result.candidates[0].content.parts
+        .filter((part) => part.text)
+        .map((part) => part.text)
+        .join("");
+
+      console.log(textResponse);
       History.push({
-        role: "user",
-        name: functionName,
-        parts: [{ text: JSON.stringify(toolResult) }],
+        role: "model",
+        parts: [{ text: textResponse }],
       });
-      console.log("Tool result:", toolResult);
+      return;
     }
-  } else {
-    console.log(result.text);
-    History.push({
-      role: "model",
-      parts: [{ text: result.text }],
-    });
   }
 }
 
@@ -106,15 +175,15 @@ async function main() {
 
   if (question.trim() === "exit") {
     console.log("Bye ...");
-    return ;
+    return;
   }
 
   if (question.trim() === "") {
     console.log("Please ask a question.");
   }
 
-  if (question.trim() === "history"){
-    console.log("History: ",History)
+  if (question.trim() === "history") {
+    console.log("History: ", History);
     return;
   }
 
